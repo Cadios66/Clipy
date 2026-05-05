@@ -62,22 +62,91 @@ def delete_all():
                 pinned_files = data.get("pinned_files", [])
     except:
         pass
-
+    deleted_count = 0
+    valid_extensions = ('.txt', '.png', '.jpg', '.jpeg', '.gif', '.bmp')
     try:
         for root, dirs, files in os.walk(delete_path, topdown=False):
             for file in files:
                 file_path = os.path.join(root, file)
-                if file_path not in pinned_files:
-                    os.remove(file_path)
-
+                if file_path not in pinned_files and file.lower().endswith(valid_extensions):
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                    except Exception as e:
+                        print(f"Не удалось удалить {file_path}: {e}")
             for folder in dirs:
                 folder_path = os.path.join(root, folder)
                 if not os.listdir(folder_path):
                     os.rmdir(folder_path)
 
-        monitoring_clipboard.create_folder_for_days()
+        if deleted_count > 0:
+            monitoring_clipboard.create_folder_for_days()
+            update_combobox_date()
+            selected_sort(combobox.get())
+            mg.showinfo("Автоудаление", f"Удалено файлов: {deleted_count}\nЗакрепленные файлы сохранены")
     except Exception as e:
         mg.showinfo("Автоудаление", f"Ошибка: {e}")
+
+def delete_selected():
+    delete_path = config.folder_path
+    settings_path = config.settings_path
+
+    files_to_delete = []
+    pinned_files = []
+    try:
+        if os.path.exists(settings_path):
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                files_to_delete = data.get("files_to_delete", [])
+                pinned_files = data.get("pinned_files", [])
+    except Exception as e:
+        print(e)
+        return
+    if not files_to_delete:
+        mg.showinfo("Удаление", "Нет файлов для удаления")
+        return
+    confirm = mg.askyesno("Подтверждение",f"Вы уверены, что хотите удалить выбранные файлы ({len(files_to_delete)} шт.)?")
+    if not confirm:
+        return
+    deleted_count = 0
+    deleted_pinned_count = 0
+
+    try:
+        for root, dirs, files in os.walk(delete_path, topdown=False):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if file_path in files_to_delete:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        deleted_count += 1
+                    if file_path in pinned_files:
+                        deleted_pinned_count += 1
+                        pinned_files.remove(file_path)
+
+            for folder in dirs:
+                folder_path = os.path.join(root, folder)
+                if os.path.exists(folder_path) and not os.listdir(folder_path):
+                    os.rmdir(folder_path)
+
+        if os.path.exists(settings_path):
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            data["files_to_delete"] = []
+            data["pinned_files"] = pinned_files
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+
+        monitoring_clipboard.create_folder_for_days()
+        update_combobox_date()
+        selected_sort(combobox.get())
+
+        msg = f"Удалено файлов: {deleted_count}"
+        if deleted_pinned_count > 0:
+            msg += f"\n(включая закрепленные: {deleted_pinned_count})"
+        mg.showinfo("Удаление", msg)
+
+    except Exception as e:
+        mg.showinfo("Удаление", f"Ошибка: {e}")
 
 def check_auto_delete():
     file_path = config.settings_path
@@ -132,9 +201,13 @@ def check_auto_delete():
 
 def auto_delete_callback(period):
     if period == "Сейчас":
+        confirm = mg.askyesno("Подтверждение",
+                              "Вы уверены, что хотите удалить ВСЕ данные?\n"
+                              "Закрепленные файлы не будут затронуты.")
+        if not confirm:
+            return
         save_auto_delete_settings("Выключено")
         delete_all()
-        mg.showinfo("Автоудаление", "Все данные удалены")
         update_combobox_date()
         selected_sort(combobox.get())
     else:
@@ -524,6 +597,7 @@ def setup():
 
     file_menu.add_command(label = "Цветовая тема", command= main_wind.color_choose)
     settings_menu.add_command(label="Удалить сейчас", command=lambda: auto_delete_callback("Сейчас"))
+    settings_menu.add_command(label="Удалить выбранные", command= delete_selected)
     settings_menu.add_separator()
     settings_menu.add_command(label="Неделя", command=lambda: auto_delete_callback("Неделя"))
     settings_menu.add_command(label="Месяц", command=lambda: auto_delete_callback("Месяц"))

@@ -49,13 +49,13 @@ def wrap_text(text, width=70):
     return '\n'.join(result)
 
 
-def is_file_pinned(file_path):
+def is_file_pinned(file_path, json_file):
     settings_path = config.settings_path
     if not os.path.exists(settings_path): return False
     try:
         with open(settings_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return file_path in data.get("pinned_files", [])
+            return file_path in data.get(json_file, [])
     except:
         return False
 
@@ -78,13 +78,33 @@ def toggle_pin(file_path, btn):
     except Exception as e:
         print(e)
 
-
+def toggle_delete(file_path, btn):
+    settings_path = config.settings_path
+    try:
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if "files_to_delete" not in data:
+            data["files_to_delete"] = []
+        if file_path in data["files_to_delete"]:
+            data["files_to_delete"].remove(file_path)
+            btn.configure(text="✓", fg="black")
+        else:
+            data["files_to_delete"].append(file_path)
+            btn.configure(text="✔", fg="red")
+        with open(settings_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(e)
 def append_row(list_of_text, content, counter, file_path):
     btn_bg = setting.lighten_color(0.2)
     formated = wrap_text(content)
-    is_pinned = is_file_pinned(file_path)
+    is_pinned = is_file_pinned(file_path, "pinned_files")
     pin_symbol = "★" if is_pinned else "☆"
     pin_color = "#f1c40f" if is_pinned else "black"
+
+    is_deleted = is_file_pinned(file_path, "files_to_delete")
+    pin_delete_symbol = "✔" if is_deleted else "✓"
+    pin_delete_color = "red" if is_deleted else "black"
 
     list_of_text.insert("end", f"{counter}: {formated}")
     list_of_text.insert("end", "\t")
@@ -103,17 +123,28 @@ def append_row(list_of_text, content, counter, file_path):
     )
     pin_btn.configure(command=lambda: toggle_pin(file_path, pin_btn))
 
+    pin_delete_btn = tk.Button(
+        list_of_text, text=pin_delete_symbol, bg=btn_bg, fg=pin_delete_color, bd=0, highlightthickness=0,
+        relief="groove", font=("Arial", 13), cursor="hand2", padx=5,
+        highlightbackground=btn_bg, activebackground=btn_bg
+    )
+    pin_delete_btn.configure(command=lambda: toggle_delete(file_path, pin_delete_btn))
     list_of_text.window_create("end", window=pin_btn, align="center")
     list_of_text.insert("end", " ")
     list_of_text.window_create("end", window=copy_btn, align="center")
+    list_of_text.insert("end", " ")
+    list_of_text.window_create("end", window=pin_delete_btn, align="center")
     list_of_text.insert("end", "\n" + "_" * 60 + "\n\n")
 
 
 def append_image_row(list_of_text, img_name, tk_img, counter, img_path):
     btn_bg = setting.lighten_color(0.2)
-    is_pinned = is_file_pinned(img_path)
+    is_pinned = is_file_pinned(img_path, "pinned_files")
     pin_symbol = "★" if is_pinned else "☆"
     pin_color = "#f1c40f" if is_pinned else "black"
+    is_deleted = is_file_pinned(img_path, "files_to_delete")
+    pin_delete_symbol = "✔" if is_deleted else "✓"
+    pin_delete_color = "red" if is_deleted else "black"
 
     list_of_text.insert("end", f"{counter}: {img_name}\n")
     list_of_text.image_create("end", image=tk_img)
@@ -133,9 +164,18 @@ def append_image_row(list_of_text, img_name, tk_img, counter, img_path):
     )
     pin_btn.configure(command=lambda: toggle_pin(img_path, pin_btn))
 
+    pin_delete_btn = tk.Button(
+        list_of_text, text=pin_delete_symbol, bg=btn_bg, fg=pin_delete_color, bd=0, highlightthickness=0,
+        relief="groove", font=("Arial", 13), cursor="hand2", padx=5,
+        highlightbackground=btn_bg, activebackground=btn_bg
+    )
+    pin_delete_btn.configure(command=lambda: toggle_delete(img_path, pin_delete_btn))
+
     list_of_text.window_create("end", window=pin_btn, align="center")
     list_of_text.insert("end", " ")
     list_of_text.window_create("end", window=copy_btn, align="center")
+    list_of_text.insert("end", " ")
+    list_of_text.window_create("end", window=pin_delete_btn, align="center")
     list_of_text.insert("end", "\n" + "-" * 65 + "\n\n")
 
 
